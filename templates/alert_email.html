@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      padding: 24px 12px;
+    }
+    .wrapper { max-width: 680px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header {
+      border-radius: 8px 8px 0 0;
+      padding: 22px 24px;
+      color: #fff;
+      {% if severity in ('Disaster', 'High') %}
+        background: linear-gradient(135deg, #c62828, #e53935);
+      {% elif severity == 'Average' %}
+        background: linear-gradient(135deg, #e65100, #fb8c00);
+      {% elif severity == 'Warning' %}
+        background: linear-gradient(135deg, #f9a825, #fdd835);
+        color: #333;
+      {% else %}
+        background: linear-gradient(135deg, #1565c0, #1976d2);
+      {% endif %}
+    }
+    .header h1  { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .header p   { font-size: 12px; opacity: 0.88; }
+
+    /* ── Section card ── */
+    .card {
+      background: #fff;
+      border: 1px solid #dde1e7;
+      border-radius: 6px;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .card-title {
+      background: #f7f8fa;
+      border-bottom: 1px solid #dde1e7;
+      padding: 9px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #555;
+    }
+    .card-body { padding: 16px; }
+
+    /* ── Meta grid ── */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+    }
+    .meta-item label {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 3px;
+      letter-spacing: 0.4px;
+    }
+    .meta-item span { font-size: 13px; font-weight: 600; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #f7f8fa;
+      text-align: left;
+      padding: 9px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #555;
+      border-bottom: 2px solid #dde1e7;
+    }
+    td { padding: 9px 12px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+
+    /* value bar */
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-bg { flex: 1; height: 6px; background: #e8eaed; border-radius: 3px; overflow: hidden; }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      {% if alert_type == 'CPU' %}background: #e53935;{% else %}background: #1e88e5;{% endif %}
+    }
+    .val-text { font-weight: 700; min-width: 38px; text-align: right; font-size: 12px; }
+
+    /* badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-recurring { background: #fff3e0; color: #bf360c; }
+    .badge-new       { background: #e8f5e9; color: #1b5e20; }
+
+    /* count chip */
+    .count-chip {
+      display: inline-block;
+      background: #e8eaf6;
+      color: #283593;
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ── Summary box ── */
+    .summary-box {
+      background: #f7f8fa;
+      border-left: 4px solid
+        {% if alert_type == 'CPU' %}#e53935{% else %}#1e88e5{% endif %};
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-line;
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 20px;
+      padding-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>{{ alert_type }} Alert Analysis &mdash; {{ host }}</h1>
+    <p>Alert remained active after 3-minute wait window. Automated deep-analysis report.</p>
+  </div>
+
+  <!-- Alert Details -->
+  <div class="card">
+    <div class="card-title">Alert Details</div>
+    <div class="card-body">
+      <div class="meta-grid">
+        <div class="meta-item"><label>Host</label><span>{{ host }}</span></div>
+        <div class="meta-item"><label>Alert Type</label><span>{{ alert_type }}</span></div>
+        <div class="meta-item"><label>Trigger</label><span>{{ trigger_name }}</span></div>
+        <div class="meta-item"><label>Severity</label><span>{{ severity }}</span></div>
+        <div class="meta-item"><label>Alert Time</label><span>{{ alert_time }}</span></div>
+        <div class="meta-item"><label>Status</label><span style="color:#c62828;">Still Active</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top N Processes -->
+  <div class="card">
+    <div class="card-title">Top {{ top5|length }} {{ alert_type }} Processes &mdash; Current Snapshot</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Process</th>
+          <th>{{ unit }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, val in top5 %}
+        <tr>
+          <td style="color:#888;font-size:12px;">{{ loop.index }}</td>
+          <td><strong>{{ name }}</strong></td>
+          <td>
+            <div class="bar-wrap">
+              <div class="bar-bg">
+                <div class="bar-fill" style="width:{{ [val, 100] | min }}%"></div>
+              </div>
+              <span class="val-text">{{ val }}%</span>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Historical Comparison -->
+  <div class="card">
+    <div class="card-title">Historical Comparison &mdash; Last 30 Days</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Process</th>
+          <th>{{ unit }} Now</th>
+          <th>Occurrences</th>
+          <th>Last Seen</th>
+          <th>Pattern</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, stats in process_stats.items() %}
+        <tr>
+          <td><strong>{{ name }}</strong></td>
+          <td>{{ stats.value }}%</td>
+          <td>
+            {% if stats.historical_count > 0 %}
+              <span class="count-chip">{{ stats.historical_count }}x</span>
+            {% else %}
+              <span style="color:#aaa">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:#555;">{{ stats.last_seen or "—" }}</td>
+          <td>
+            {% if stats.seen_before %}
+              <span class="badge badge-recurring">Recurring</span>
+            {% else %}
+              <span class="badge badge-new">New</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Analysis Summary -->
+  <div class="card">
+    <div class="card-title">Analysis &amp; Conclusion</div>
+    <div class="card-body">
+      <div class="summary-box">{{ summary }}</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated by Alert Analytics Workflow &bull; {{ alert_time }}
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "alert_id": "TEST-001",
+  "host": "test-server-01",
+  "alert_type": "cpu",
+  "trigger_name": "High CPU utilization",
+  "severity": "High",
+  "time": "2026-04-14 10:00:00"
+}

@@ -76,7 +76,11 @@ async def process_alert_workflow(alert_data: dict) -> None:
         await asyncio.to_thread(send_alert_email, alert_data, analysis)
 
         # ── Step 6b: Send Teams notification (async, optional) ───────────
-        await send_teams_notification(alert_data, analysis)
+        # Isolated — a Teams failure must never fail the whole workflow.
+        try:
+            await send_teams_notification(alert_data, analysis)
+        except Exception:
+            logger.exception(f"[{alert_id}] Teams notification failed — continuing.")
 
         # ── Step 7: Delete alert record — email is the record ────────────
         _delete_alert(db, alert_id)

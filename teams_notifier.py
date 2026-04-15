@@ -79,7 +79,7 @@ def _build_adaptive_card(alert_data: dict, analysis: dict) -> dict:
     card: dict = {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type":    "AdaptiveCard",
-        "version": "1.4",
+        "version": "1.2",
         "body": [
             # ── Header ────────────────────────────────────────────────────────
             {
@@ -162,14 +162,13 @@ async def send_teams_notification(alert_data: dict, analysis: dict) -> None:
 
     card = _build_adaptive_card(alert_data, analysis)
 
-    # Both legacy Incoming Webhooks and the new Workflow Connector accept
-    # the "message + adaptive card attachment" envelope below.
+    # Power Automate Workflow Connector rejects null values — omit contentUrl.
+    # Both legacy Incoming Webhooks and the Workflow Connector accept this envelope.
     payload = {
         "type": "message",
         "attachments": [
             {
                 "contentType": "application/vnd.microsoft.card.adaptive",
-                "contentUrl":  None,
                 "content":     card,
             }
         ],

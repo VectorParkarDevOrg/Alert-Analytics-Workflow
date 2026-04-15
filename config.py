@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
 
+    # ── Teams ─────────────────────────────────────────────────────────────────
+    # Paste the webhook URL from Teams channel → Connectors (or Workflows)
+    teams_webhook_url: str  = ""
+    # Set to true to enable Teams notifications alongside email
+    teams_enabled: bool     = False
+
     # ── App ───────────────────────────────────────────────────────────────────
     db_path: str  = "./alert_analytics.db"
     app_port: int = 6666

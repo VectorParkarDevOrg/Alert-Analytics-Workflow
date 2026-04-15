@@ -5,10 +5,14 @@ Called as a FastAPI BackgroundTask — runs entirely async.
 Flow:
   1. Sleep ALERT_WAIT_SECONDS (default 3 min)
   2. Check Zabbix: is trigger still active?
-     NO  → delete alert record, stop (no email)
-     YES → fetch top-N processes + history → analyze → email → delete alert record
+     NO  → delete alert record, stop (no notifications sent)
+     YES → fetch top-N processes + history → analyze → notify → delete alert record
 
-Alert records are deleted once the workflow completes (resolved or email_sent).
+Notifications sent (each independently enabled via .env):
+  - Email   : always sent when EMAIL_RECIPIENTS is set
+  - Teams   : sent when TEAMS_ENABLED=true and TEAMS_WEBHOOK_URL is set
+
+Alert records are deleted once the workflow completes (resolved or notifications sent).
 ProcessSnapshot records are kept — they build the local 30-day history.
 Only "error" records remain in the DB for debugging.
 """
@@ -21,6 +25,7 @@ from models import Alert, ProcessSnapshot
 from zabbix_client import ZabbixClient
 from process_analyzer import analyze_processes
 from email_notifier import send_alert_email
+from teams_notifier import send_teams_notification
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -70,9 +75,12 @@ async def process_alert_workflow(alert_data: dict) -> None:
         # ── Step 6: Send email (sync → run in thread pool) ───────────────
         await asyncio.to_thread(send_alert_email, alert_data, analysis)
 
+        # ── Step 6b: Send Teams notification (async, optional) ───────────
+        await send_teams_notification(alert_data, analysis)
+
         # ── Step 7: Delete alert record — email is the record ────────────
         _delete_alert(db, alert_id)
-        logger.info(f"[{alert_id}] Workflow complete. Email sent, alert record removed.")
+        logger.info(f"[{alert_id}] Workflow complete. Notifications sent, alert record removed.")
 
     except Exception:
         logger.exception(f"[{alert_id}] Workflow failed.")

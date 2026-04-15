@@ -1,6 +1,6 @@
 # Alert Analytics Workflow
 
-An automated service that monitors CPU and Memory alerts from **Zabbix**, waits to confirm the alert is real, analyzes which processes are causing the issue, and sends a detailed **HTML email report** — all without any manual intervention.
+An automated service that monitors CPU and Memory alerts from **Zabbix**, waits to confirm the alert is real, analyzes which processes are causing the issue, and delivers a detailed report via **email**, **Microsoft Teams**, or both — all without any manual intervention.
 
 ---
 
@@ -12,9 +12,9 @@ When your server has high CPU or Memory usage, Zabbix fires an alert. But many a
 2. **Waits 3 minutes** to see if it resolves on its own
 3. If still active → **fetches the top processes** consuming CPU/Memory from Zabbix
 4. **Compares against 30 days of history** — is this a recurring issue or something new?
-5. **Sends a professional HTML email** with full analysis to your team
+5. **Sends notifications** with full analysis — to email, Microsoft Teams, or both
 
-No more investigating every noisy alert. You only get emailed when something actually matters.
+No more investigating every noisy alert. You only get notified when something actually matters.
 
 ---
 
@@ -54,10 +54,12 @@ Zabbix fires a CPU/Memory alert
               • Who is the primary contributor?
                       │
                       ▼
-            Send HTML email report to your team
+            Send notifications (independently enabled):
+              • Email  — HTML report via Gmail SMTP
+              • Teams  — Adaptive Card to channel webhook
                       │
                       ▼
-            Status: "email_sent"
+            Status: "notifications sent"
 ```
 
 ---
@@ -67,7 +69,8 @@ Zabbix fires a CPU/Memory alert
 - Ubuntu / Debian Linux server
 - Python 3.10 or higher
 - Zabbix 6.4+ (tested on Zabbix 7.4.6)
-- Gmail account with App Password enabled
+- Gmail account with App Password enabled (for email notifications)
+- Microsoft Teams channel with a webhook configured (for Teams notifications)
 - Port open for the service (default: 6666) — or use Cloudflare Tunnel (recommended)
 
 ---
@@ -140,6 +143,12 @@ SMTP_PORT=587
 # Who receives the alert emails — comma-separated
 EMAIL_RECIPIENTS=ops@company.com,manager@company.com
 
+# ── Microsoft Teams ──────────────────────────────────────────────────
+# Set TEAMS_ENABLED=true and paste your webhook URL to post to a channel.
+# Leave TEAMS_ENABLED=false to disable Teams notifications entirely.
+TEAMS_ENABLED=false
+TEAMS_WEBHOOK_URL=
+
 # ── App ─────────────────────────────────────────────────────────────
 # Path to SQLite database file
 DB_PATH=./alert_analytics.db
@@ -193,7 +202,69 @@ You cannot use your regular Gmail password. Google requires an App Password for 
 
 ---
 
-### Step 7 — Test Zabbix Connection
+### Step 7 — Configure Notification Channels
+
+The service supports **Email**, **Microsoft Teams**, or **both at the same time**. Each channel is independently controlled via `.env`.
+
+---
+
+#### Option A — Email Only
+
+```env
+# Email on, Teams off
+EMAIL_RECIPIENTS=ops@company.com,manager@company.com
+TEAMS_ENABLED=false
+TEAMS_WEBHOOK_URL=
+```
+
+Email is always active as long as `EMAIL_RECIPIENTS` is set and Gmail credentials are valid.
+
+---
+
+#### Option B — Microsoft Teams Only
+
+```env
+# Teams on, Email off (clear the recipients list)
+EMAIL_RECIPIENTS=
+TEAMS_ENABLED=true
+TEAMS_WEBHOOK_URL=https://your-workflow-webhook-url
+```
+
+> When `EMAIL_RECIPIENTS` is empty the email step is skipped automatically.
+
+**Getting the Teams webhook URL — pick one method:**
+
+**Method 1 — Workflow Connector (new Teams, recommended by Microsoft):**
+1. Open the Teams channel you want alerts posted to
+2. Click **···** next to the channel name → **Workflows**
+3. Search for **"Post to a channel when a webhook request is received"**
+4. Click it → follow the setup wizard → copy the generated HTTPS URL
+
+**Method 2 — Incoming Webhook (classic Teams):**
+1. Open the Teams channel
+2. Click **···** → **Connectors**
+3. Find **Incoming Webhook** → **Configure**
+4. Give it a name (e.g. `Alert Analytics`) → click **Create**
+5. Copy the webhook URL
+
+Paste whichever URL you get into `TEAMS_WEBHOOK_URL`.
+
+---
+
+#### Option C — Both Email and Teams
+
+```env
+# Both channels active simultaneously
+EMAIL_RECIPIENTS=ops@company.com,manager@company.com
+TEAMS_ENABLED=true
+TEAMS_WEBHOOK_URL=https://your-workflow-webhook-url
+```
+
+Both notifications are sent for every confirmed alert. A failure in one channel does not block the other.
+
+---
+
+### Step 8 — Test Zabbix Connection
 
 Before starting the service, verify that your Zabbix credentials are correct:
 
@@ -217,7 +288,7 @@ python test_zabbix.py your-hostname
 
 ---
 
-### Step 8 — Test Email
+### Step 9 — Test Email
 
 Send a sample HTML email to all configured recipients:
 
@@ -229,7 +300,27 @@ Check your inbox — if you receive the email, SMTP is working correctly.
 
 ---
 
-### Step 9 — Install as a System Service
+### Step 10 — Test Teams Notification
+
+Post a sample Adaptive Card to your configured Teams channel:
+
+```bash
+python test_teams.py
+```
+
+You should see the card appear in the channel within a few seconds. The card includes:
+- Alert type, host, severity, and time
+- Top 5 processes with usage values
+- Recurring vs. new process classification
+- Analysis summary
+
+If the script prints `Notification posted` but nothing appears in Teams, verify that the Power Automate flow (or Incoming Webhook connector) is active and the URL in `.env` is correct.
+
+> Skip this step if you are not using Teams (`TEAMS_ENABLED=false`).
+
+---
+
+### Step 11 — Install as a System Service
 
 The service runs as a background daemon that starts automatically on boot.
 
@@ -267,7 +358,7 @@ You should see `Active: active (running)`.
 
 ---
 
-### Step 10 — Make the Service Reachable
+### Step 12 — Make the Service Reachable
 
 **Option A — Cloudflare Tunnel (Recommended)**
 
@@ -298,7 +389,7 @@ Also open port 6666 in your cloud provider's security group (AWS / Azure / GCP) 
 
 ---
 
-### Step 11 — Configure Zabbix Connector
+### Step 13 — Configure Zabbix Connector
 
 The Zabbix Connector automatically pushes all events to your service in real time.
 
@@ -318,7 +409,7 @@ Click **Add** to save.
 
 ---
 
-### Step 12 — Verify Everything Works
+### Step 14 — Verify Everything Works
 
 ```bash
 # Health check
@@ -437,6 +528,8 @@ sqlite3 alert_analytics.db "SELECT alert_id, host, alert_type, status, created_a
 | Alert stuck on `pending` | Still within 3-minute wait | Wait 3 minutes, then check logs with `journalctl -u alert-analytics -f` |
 | Status `error` | Zabbix unreachable or item missing | Check logs for exact error, run `python test_zabbix.py <hostname>` |
 | No email received | Wrong App Password or recipients | Run `python test_email.py` to isolate SMTP issues |
+| No Teams notification | Channel not configured | Check `TEAMS_ENABLED=true` and `TEAMS_WEBHOOK_URL` is set in `.env` |
+| Teams card not appearing | Webhook URL invalid or flow inactive | Run `python test_teams.py` — if it prints `Notification posted` but nothing appears, check that the Power Automate flow or Incoming Webhook connector is active |
 | Zabbix token error | Using old username/password format | Zabbix 6.4+ needs Bearer token — generate one from Zabbix UI |
 | Item not found | Item name mismatch | Run `python test_zabbix.py <hostname>` and update `CPU_TOP_ITEM_NAME` / `MEMORY_TOP_ITEM_NAME` in `.env` |
 
@@ -447,10 +540,11 @@ sqlite3 alert_analytics.db "SELECT alert_id, host, alert_type, status, created_a
 ```
 Alert-Analytics-Workflow/
 ├── main.py                # FastAPI app — all HTTP endpoints
-├── alert_processor.py     # Background workflow: wait → check → analyze → email
+├── alert_processor.py     # Background workflow: wait → check → analyze → notify
 ├── zabbix_client.py       # Zabbix API client (Bearer token, JSON-RPC)
 ├── process_analyzer.py    # Analysis logic — recurring vs new processes
 ├── email_notifier.py      # Gmail SMTP sender with HTML template
+├── teams_notifier.py      # Microsoft Teams Adaptive Card via webhook
 ├── models.py              # Database tables (Alert, ProcessSnapshot)
 ├── database.py            # SQLite setup
 ├── config.py              # All settings loaded from .env
@@ -461,6 +555,7 @@ Alert-Analytics-Workflow/
 ├── .env.example           # Template — copy to .env and fill in values
 ├── test_zabbix.py         # Test Zabbix API connectivity and items
 ├── test_email.py          # Test SMTP — sends a real sample email
+├── test_teams.py          # Test Teams webhook — posts a sample card to channel
 ├── test_alert.json        # Sample alert payload for manual testing
 └── COMMANDS.md            # Quick command reference
 ```
@@ -488,6 +583,7 @@ nano .env   # fill in all values
 # 5. Test connections
 venv/bin/python test_zabbix.py
 venv/bin/python test_email.py
+venv/bin/python test_teams.py   # skip if Teams not configured
 
 # 6. Update service file paths, then install
 nano alert-analytics.service
